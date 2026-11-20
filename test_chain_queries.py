@@ -2,6 +2,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -67,8 +68,58 @@ class ChainQueries(unittest.TestCase):
 
     def test_wrong_chain_is_rejected(self):
         status = {"result": {"node_info": {"network": "lumen"}}}
-        with patch.object(bot, "http_get", return_value=status):
-            self.assertIsNone(bot.get_status())
+        with patch.object(bot, "http_get", return_value=status), patch.object(bot, "_lang", "en"), \
+             patch.object(bot, "RPC", "https://rpc.example:3000/service"), patch.object(bot, "CHAIN_ID", "expected"), \
+             patch.object(bot, "svc_active", return_value=True), patch.object(bot, "get_disk", return_value={"pct": None}), \
+             patch.object(bot, "get_signing") as signing, patch.object(bot, "get_delegation") as stake, \
+             patch.object(bot, "get_peers") as peers:
+            for report in (bot.fmt_status, bot.fmt_sync, bot.fmt_val, bot.fmt_peers):
+                self.assertIn("RPC rpc.example:3000 reports chain lumen (expected expected)", report())
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(bot.check_node(), 1)
+            self.assertEqual(json.loads(output.getvalue())["rpc_error"]["actual"], "lumen")
+            for query in (signing, stake, peers):
+                query.assert_not_called()
+
+    def test_endpoint_in_reports_uses_only_host_and_effective_port(self):
+        for url, label in (("http://127.0.0.1:26657", "127.0.0.1:26657"),
+                           ("https://{}@rpc.invalid/private?q=x".format("operator:example"), "rpc.invalid:443"),
+                           ("http://[::1]:38000/path", "[::1]:38000"), ("http://rpc.invalid", "rpc.invalid:80")):
+            with self.subTest(url=url), patch.object(bot, "RPC", url), patch.object(bot, "get_status", return_value=None):
+                for lang in ("en", "ru", "de"):
+                    with patch.object(bot, "_lang", lang):
+                        self.assertEqual(bot.fmt_sync(), bot.tr("a_rpc_down") % label)
+
+    def test_validator_report_uses_configured_chain_and_translated_flags(self):
+        for value in (False, True):
+            signing = {"jailed": value, "tombstoned": value, "missed": 7, "jailed_until": "test"}
+            with patch.object(bot, "get_signing", return_value=signing), patch.object(bot, "CHAIN_ID", "local-chain"), \
+                 patch.object(bot, "get_status", return_value={"vp": 1}), patch.object(bot, "fmt_delegation", return_value="stake"):
+                for lang in ("en", "ru", "de"):
+                    with patch.object(bot, "_lang", lang):
+                        text = bot.fmt_val()
+                        self.assertIn("local-chain", text)
+                        mark = bot.tr("y_yes" if value else "y_no")
+                        self.assertIn("Tombstoned: " + mark, text)
+                        self.assertIn("Jailed: " + mark, text)
+
+    def test_disk_usage_failure_is_reported(self):
+        with patch.object(bot.shutil, "disk_usage", side_effect=OSError), patch.object(bot, "_lang", "en"):
+            self.assertIsNone(bot.get_disk()["pct"])
+            self.assertIn("unavailable", bot.fmt_disk())
+            self.assertIn("unavailable", bot.disk_summary())
+
+    def test_startup_and_poll_persistence_errors_allow_next_monitor(self):
+        state = {}
+        with patch.object(bot, "TOKEN", "test"), patch.object(bot, "load_state", return_value=state), \
+             patch.object(bot, "monitor", side_effect=[OSError(), None]) as monitor, patch.object(bot, "broadcast"), \
+             patch.object(bot, "tg", side_effect=[{"ok": True, "result": []}, KeyboardInterrupt]), \
+             patch.object(bot, "save_state", side_effect=OSError()), patch.object(bot, "CHECK_INTERVAL", 1), \
+             patch.object(bot.time, "time", side_effect=[10, 12, 12]), contextlib.redirect_stderr(io.StringIO()), \
+             self.assertRaises(KeyboardInterrupt):
+            bot.run_bot()
+        self.assertEqual(monitor.call_count, 2)
 
     def validator_response(self, raw):
         amount = raw.encode('ascii')

@@ -15,6 +15,12 @@ self-delegation, from the staking module token balance. The bot converts el1
 using 18 decimal places without floating-point rounding. Missing staking data
 is reported as unavailable rather than as a zero balance.
 
+RPC alerts show the host and port from `RPC_URL`. If a node reports a different
+chain, the bot shows the expected and observed chain IDs and suspends validator
+checks on that endpoint. A signing-info outage that triggered an alert produces
+one recovery notice. A confirmed tombstone produces one alert for the validator.
+Node, RPC and disk monitoring continue.
+
 ## Installation
 
 On a Linux host with Python 3 and systemd, clone the repository and install the bot under its own service account.

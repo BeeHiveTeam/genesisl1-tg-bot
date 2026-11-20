@@ -109,8 +109,8 @@ def tg(method, params=None, timeout=35):
         sys.stderr.write("tg %s transport error: %s\n" % (method, type(e).__name__)); return None
 
 # ── i18n ──────────────────────────────────────────────────────────────────────
-# One bot, one operator chat, so language is a single setting. Default English; LANG=en|ru|de
-# in config.env sets it, the 🌐 button and /lang cycle at runtime. Strings keep %s formatting.
+# Russian is the default when LANG is unset in config.env. The 🌐 button and /lang
+# switch between en, ru and de at runtime.
 _cfg_lang = CFG.get("LANG", "ru").strip().lower()
 DEFAULT_LANG = _cfg_lang if _cfg_lang in ("en", "ru", "de") else "en"
 _lang = DEFAULT_LANG
@@ -135,7 +135,6 @@ T = {
 
   "st_net":   {"en": "Network: %s  genesisd %s (comet %s)", "ru": "Сеть: %s  genesisd %s (comet %s)", "de": "Netz: %s  genesisd %s (comet %s)"},
   "st_sync":  {"en": "Sync: %s  block %s  lag %s", "ru": "Синк: %s  блок %s  lag %s", "de": "Sync: %s  Block %s  Lag %s"},
-  "st_norpc": {"en": "Sync: 🔴 RPC :29657 not responding", "ru": "Синк: 🔴 RPC :29657 не отвечает", "de": "Sync: 🔴 RPC :29657 antwortet nicht"},
   "st_jail_unk": {"en": "Jailed: ⚠️ NOT CHECKED — signing-info unavailable", "ru": "Jailed: ⚠️ НЕ ПРОВЕРЕНО — signing-info недоступна", "de": "Jailed: ⚠️ NICHT GEPRÜFT — signing-info nicht verfügbar"},
   "st_missed_unk": {"en": "Missed blocks: ⚠️ NOT CHECKED", "ru": "Missed blocks: ⚠️ НЕ ПРОВЕРЕНО", "de": "Missed blocks: ⚠️ NICHT GEPRÜFT"},
   "st_missed": {"en": "Missed blocks: %d / %d (jail threshold >%d)\nVoting power: %s", "ru": "Missed blocks: %d / %d (порог джейла >%d)\nVoting power: %s", "de": "Missed blocks: %d / %d (Jail-Schwelle >%d)\nVoting power: %s"},
@@ -144,14 +143,13 @@ T = {
   "st_stake_unk": {"en": "Total delegated: ⚠️ unavailable", "ru": "Всего делегировано: ⚠️ данные недоступны", "de": "Insgesamt delegiert: ⚠️ nicht verfügbar"},
   "st_peers_unk": {"en": "Peers: ⚠️ NOT CHECKED (/net_info unavailable)", "ru": "Пиры: ⚠️ НЕ ПРОВЕРЕНО (/net_info недоступен)", "de": "Peers: ⚠️ NICHT GEPRÜFT (/net_info nicht verfügbar)"},
   "st_disk":  {"en": "Disk /: %s %d%% used, %s GB", "ru": "Диск /: %s %d%% занято, %s ГБ", "de": "Platte /: %s %d%% belegt, %s GB"},
-  "st_disk_unk": {"en": "Disk /: ⚠️ NOT CHECKED (df gave no parsable output)", "ru": "Диск /: ⚠️ НЕ ПРОВЕРЕНО (df не дал разбираемый вывод)", "de": "Platte /: ⚠️ NICHT GEPRÜFT (df lieferte keine auswertbare Ausgabe)"},
-  "st_unchecked": {"en": "NOT CURRENTLY CHECKED (RPC :29657 / genesisd / VALCONS)", "ru": "СЕЙЧАС НЕ ПРОВЕРЯЮТСЯ (RPC :29657 / genesisd / VALCONS)", "de": "DERZEIT NICHT GEPRÜFT (RPC :29657 / genesisd / VALCONS)"},
+  "st_disk_unk": {"en": "Disk /: ⚠️ usage unavailable", "ru": "Диск /: ⚠️ данные о занятом месте недоступны", "de": "Platte /: ⚠️ Belegung nicht verfügbar"},
+  "st_unchecked": {"en": "NOT CURRENTLY CHECKED (RPC %s / genesisd / VALCONS)", "ru": "СЕЙЧАС НЕ ПРОВЕРЯЮТСЯ (RPC %s / genesisd / VALCONS)", "de": "DERZEIT NICHT GEPRÜFT (RPC %s / genesisd / VALCONS)"},
 
-  "v_body":   {"en": "Validator genesis_29-2\nJailed: %s\njailed_until: %s\nTombstoned: %s\n", "ru": "Валидатор genesis_29-2\nJailed: %s\njailed_until: %s\nTombstoned: %s\n", "de": "Validator genesis_29-2\nJailed: %s\njailed_until: %s\nTombstoned: %s\n"},
+  "v_body":   {"en": "Validator %s\nJailed: %s\njailed_until: %s\nTombstoned: %s\n", "ru": "Валидатор %s\nJailed: %s\njailed_until: %s\nTombstoned: %s\n", "de": "Validator %s\nJailed: %s\njailed_until: %s\nTombstoned: %s\n"},
   "v_missed": {"en": "Missed blocks: %d / window %d (jail at >%d)", "ru": "Missed blocks: %d / окно %d (джейл при >%d)", "de": "Missed blocks: %d / Fenster %d (Jail bei >%d)"},
   "v_nosign": {"en": "signing-info unavailable (check VALCONS/node)", "ru": "signing-info недоступна (проверь VALCONS/ноду)", "de": "signing-info nicht verfügbar (VALCONS/Node prüfen)"},
   "sy_body":  {"en": "Sync %s\nblock: %s\nlag: %s\ncatching_up: %s", "ru": "Синк %s\nблок: %s\nlag: %s\ncatching_up: %s", "de": "Sync %s\nBlock: %s\nLag: %s\ncatching_up: %s"},
-  "sy_norpc": {"en": "🔴 RPC :29657 not responding", "ru": "🔴 RPC :29657 не отвечает", "de": "🔴 RPC :29657 antwortet nicht"},
   "pe_body":  {"en": "Peers: %s", "ru": "Пиры: %s", "de": "Peers: %s"},
   "dk_body":  {"en": "Disk /: %s\n%s", "ru": "Диск /: %s\n%s", "de": "Platte /: %s\n%s"},
   "dk_used":  {"en": "%d%% used, %s GB free", "ru": "%d%% занято, %s ГБ свободно", "de": "%d%% belegt, %s GB frei"},
@@ -172,9 +170,11 @@ T = {
   "a_svc_still": {"en": "🔴 genesisd still down", "ru": "🔴 genesisd всё ещё down", "de": "🔴 genesisd weiterhin ausgefallen"},
   "a_svc_up": {"en": "✅ genesisd is active again", "ru": "✅ genesisd снова active", "de": "✅ genesisd ist wieder aktiv"},
   "a_restart": {"en": "🔄 RESTART: genesisd restarted\nstarted: %s", "ru": "🔄 РЕСТАРТ: genesisd перезапущен\nстарт: %s", "de": "🔄 NEUSTART: genesisd neu gestartet\nStart: %s"},
-  "a_rpc_down": {"en": "🔴 RPC :29657 not responding", "ru": "🔴 RPC :29657 не отвечает", "de": "🔴 RPC :29657 antwortet nicht"},
-  "a_rpc_still": {"en": "🔴 RPC :29657 still not responding", "ru": "🔴 RPC :29657 всё ещё не отвечает", "de": "🔴 RPC :29657 antwortet weiterhin nicht"},
-  "a_rpc_up": {"en": "✅ RPC :29657 responding again", "ru": "✅ RPC :29657 снова отвечает", "de": "✅ RPC :29657 antwortet wieder"},
+  "a_rpc_down": {"en": "🔴 RPC %s not responding", "ru": "🔴 RPC %s не отвечает", "de": "🔴 RPC %s antwortet nicht"},
+  "a_rpc_still": {"en": "🔴 RPC %s still not responding", "ru": "🔴 RPC %s всё ещё не отвечает", "de": "🔴 RPC %s antwortet weiterhin nicht"},
+  "a_rpc_up": {"en": "✅ RPC %s responding again", "ru": "✅ RPC %s снова отвечает", "de": "✅ RPC %s antwortet wieder"},
+  "rpc_wrong_chain": {"en": "🔴 RPC %s reports chain %s (expected %s)", "ru": "🔴 RPC %s вернул сеть %s (ожидалась %s)", "de": "🔴 RPC %s meldet das Netz %s (erwartet: %s)"},
+  "rpc_chain_ok": {"en": "✅ RPC %s reports the expected chain %s again", "ru": "✅ RPC %s снова возвращает нужную сеть %s", "de": "✅ RPC %s meldet wieder das erwartete Netz %s"},
   "a_stuck":  {"en": "🔴 BLOCKS NOT ADVANCING: height stuck at %s (~%d min)", "ru": "🔴 БЛОКИ НЕ РАСТУТ: высота застряла на %s (~%d мин)", "de": "🔴 BLÖCKE STEHEN: Höhe bei %s festgefahren (~%d Min)"},
   "a_stuck_still": {"en": "🔴 Blocks still not advancing (%s)", "ru": "🔴 Блоки всё ещё не растут (%s)", "de": "🔴 Blöcke wachsen weiterhin nicht (%s)"},
   "a_stuck_ok": {"en": "✅ Blocks advancing again: %s", "ru": "✅ Блоки снова растут: %s", "de": "✅ Blöcke wachsen wieder: %s"},
@@ -187,6 +187,7 @@ T = {
   "a_disk":   {"en": "🟡 DISK /: %d%% (%s GB free)", "ru": "🟡 ДИСК /: %d%% (%s ГБ свободно)", "de": "🟡 PLATTE /: %d%% (%s GB frei)"},
   "a_disk_ok": {"en": "✅ Disk ok: %d%%", "ru": "✅ Диск ок: %d%%", "de": "✅ Platte ok: %d%%"},
   "a_nosign": {"en": "⚠️ signing-info unavailable for %d cycles — jail and missed blocks ", "ru": "⚠️ signing-info недоступна %d циклов подряд — джейл и пропущенные блоки ", "de": "⚠️ signing-info seit %d Zyklen nicht verfügbar — Jail und verpasste Blöcke "},
+  "a_signing_ok": {"en": "✅ signing-info available again", "ru": "✅ signing-info снова доступна", "de": "✅ signing-info wieder verfügbar"},
   "a_nonet":  {"en": "⚠️ /net_info unavailable for %d cycles — peer count is NOT being checked", "ru": "⚠️ /net_info недоступен %d циклов — число пиров НЕ проверяется", "de": "⚠️ /net_info seit %d Zyklen nicht verfügbar — Peer-Anzahl wird NICHT geprüft"},
   "a_repeat": {"en": "(repeat) ", "ru": "(повтор) ", "de": "(Wiederholung) "},
   "a_reminder": {"en": "⏰ REMINDER (repeats every 30 min):\n", "ru": "⏰ НАПОМИНАНИЕ (повтор каждые 30 мин):\n", "de": "⏰ ERINNERUNG (alle 30 Min):\n"},
@@ -244,7 +245,7 @@ def broadcast(text, st=None):
             sys.stderr.write("Telegram alert delivered\n")
         elif st is not None:
             st.setdefault("pending_alerts", []).append({"cid": cid, "text": text, "ts": time.time()})
-            sys.stderr.write("alert QUEUED (send failed) for %s\n" % cid)
+            sys.stderr.write("Telegram alert queued for retry\n")
 
 def retry_pending(st):
     now = time.time()
@@ -257,23 +258,6 @@ def retry_pending(st):
     st["pending_alerts"] = remaining + pending[2:]
 
 # ---------- helpers ----------
-def sh(cmd, timeout=15):
-    """Вывод команды или "" — совместимая обёртка. Для новых проверок брать sh_try."""
-    return sh_try(cmd, timeout)[1]
-
-def sh_try(cmd, timeout=15):
-    """(получилось, вывод). Три состояния вместо двух.
-
-    Прежний sh() возвращал "" и при таймауте, и при успешной команде с пустым выводом.
-    Вызывающий не мог их различить, поэтому «зонд не отработал» читалось как «данных нет,
-    значит всё спокойно». В monad-боте это уже исправлено, сюда не перенесли.
-    """
-    try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
-    except Exception:
-        return False, ""
-    return r.returncode == 0, r.stdout.strip()
-
 def sh_args(argv, timeout=15):
     """Без shell: список аргументов. Значения конфигурации (VALCONS, VALOPER, RPC) попадали
     в строку, исполняемую shell'ом от root — точка с запятой или подстановка в config.env
@@ -306,13 +290,37 @@ def svc_start():
     return sh_args(["systemctl", "show", SERVICE,
                     "-p", "ExecMainStartTimestamp", "--value"])[1]
 
+def rpc_endpoint():
+    """Show the configured host and port, omitting credentials, paths and query parameters."""
+    try:
+        endpoint = urllib.parse.urlsplit(RPC)
+        host = endpoint.hostname
+        if not host or endpoint.scheme not in ("http", "https"):
+            return "?"
+        port = endpoint.port or (443 if endpoint.scheme == "https" else 80)
+        return "%s:%d" % ("[" + host + "]" if ":" in host else host, port)
+    except ValueError:
+        return "?"
+
+def rpc_problem(status):
+    if status and "wrong_chain" in status:
+        return tr("rpc_wrong_chain") % (rpc_endpoint(), status["wrong_chain"], CHAIN_ID)
+    return tr("a_rpc_down") % rpc_endpoint()
+
 def get_status():
     d = http_get("/status")
-    if not d or "result" not in d:
+    r = d.get("result") if isinstance(d, dict) else None
+    if not isinstance(r, dict):
         return None
-    r = d["result"]; si = r.get("sync_info", {}); vi = r.get("validator_info", {})
     ni = r.get("node_info", {})
-    if ni.get("network") != CHAIN_ID:
+    network = ni.get("network") if isinstance(ni, dict) else None
+    if not isinstance(network, str) or not network:
+        return None
+    if network != CHAIN_ID:
+        return {"wrong_chain": network}
+    si = r.get("sync_info") or {}
+    vi = r.get("validator_info") or {}
+    if not isinstance(si, dict) or not isinstance(vi, dict):
         return None
     h = si.get("latest_block_height")
     ts = si.get("latest_block_time", "")
@@ -327,7 +335,7 @@ def get_status():
     # voting_power: None, если поля validator_info нет вовсе (ранний старт comet).
     # `int(x or 0)` делал это неотличимым от «выпали из активного сета».
     vp_raw = vi.get("voting_power")
-    return {"height": int(h) if h else None,
+    return {"height": int(h) if str(h).isdigit() else None,
             "catching_up": bool(si.get("catching_up")),
             "vp": (int(vp_raw) if str(vp_raw).lstrip("-").isdigit() else None),
             "version": ni.get("version", "?"),
@@ -427,9 +435,22 @@ def fmt_delegation():
             if delegation is not None else tr("st_stake_unk"))
 
 def get_disk():
-    usage = shutil.disk_usage("/")
-    return {"pct": round(100 * usage.used / (usage.used + usage.free)),
-            "avail_gb": round(usage.free / 1024**3, 1)}
+    try:
+        usage = shutil.disk_usage("/")
+        available_total = usage.used + usage.free
+        if available_total > 0:
+            return {"pct": round(100 * usage.used / available_total),
+                    "avail_gb": round(usage.free / 1024**3, 1)}
+    except OSError:
+        pass
+    return {"pct": None, "avail_gb": None}
+
+def disk_summary():
+    disk = get_disk()
+    if disk["pct"] is None:
+        return tr("st_disk_unk")
+    return tr("st_disk") % ("✅" if disk["pct"] < DISK_WARN_PCT else "🟡",
+                            disk["pct"], disk["avail_gb"])
 
 # ---------- reports ----------
 def sync_symbol(s):
@@ -458,13 +479,15 @@ def fmt_status():
     L = ["🔷 GenesisL1 — %s" % HOST]
     L.append(tr("svc") + ("✅ active" if svc_active() else tr("svc_bad")))
     s = get_status()
+    if s and "wrong_chain" in s:
+        return "\n".join(L + [rpc_problem(s), disk_summary()])
     if s:
         L.append(tr("st_net") % (s["network"], app_version(), s["version"]))
         L.append(tr("st_sync") % (sync_symbol(s), s["height"],
                  "?" if s["lag"] is None else "%ds" % s["lag"]))
         L.append("Voting power: %s" % s["vp"])
     else:
-        L.append(tr("st_norpc"))
+        L.append(rpc_problem(s))
     L.append(fmt_delegation())
     sg = get_signing()
     if sg:
@@ -481,38 +504,44 @@ def fmt_status():
         L.append(tr("st_missed_unk"))
     p = get_peers()
     L.append(tr("st_peers") % p if p is not None else tr("st_peers_unk"))
-    d = get_disk()
-    if d["pct"] is not None:
-        L.append(tr("st_disk") % (
-            "✅" if d["pct"] < DISK_WARN_PCT else "🟡", d["pct"], d["avail_gb"]))
-    else:
-        L.append(tr("st_disk_unk"))
+    L.append(disk_summary())
     return "\n".join(L)
 
 def fmt_val():
-    sg = get_signing(); s = get_status()
-    if not sg: return tr("v_nosign") + "\n" + fmt_delegation()
-    # v_body and st_missed were one implicitly-concatenated literal; keep them joined so the
-    # combined format string still consumes all seven arguments in order.
+    s = get_status()
+    if s and "wrong_chain" in s:
+        return rpc_problem(s)
+    sg = get_signing()
+    if not sg:
+        lines = [tr("v_nosign"), fmt_delegation()]
+        if s is None:
+            lines.insert(0, rpc_problem(s))
+        return "\n".join(lines)
     return ((tr("v_body") + tr("st_missed"))
-            % (tr("y_yes") if sg["jailed"] else tr("y_no"), sg["jailed_until"],
-               sg["tombstoned"], sg["missed"], SLASH_WINDOW, JAIL_THRESHOLD,
+            % (CHAIN_ID, tr("y_yes") if sg["jailed"] else tr("y_no"), sg["jailed_until"],
+               tr("y_yes") if sg["tombstoned"] else tr("y_no"), sg["missed"], SLASH_WINDOW, JAIL_THRESHOLD,
                s["vp"] if s else "?")) + "\n" + fmt_delegation()
 
 def fmt_sync():
     s = get_status()
-    if not s: return tr("a_rpc_down")
+    if not s or "wrong_chain" in s: return rpc_problem(s)
     return (tr("sy_body")
             % (sync_symbol(s),
                s["height"], "?" if s["lag"] is None else "%ds" % s["lag"], s["catching_up"]))
 
 def fmt_peers():
+    s = get_status()
+    if s and "wrong_chain" in s:
+        return rpc_problem(s)
     p = get_peers(); return tr("pe_body") % ("?" if p is None else p)
 
 def fmt_disk():
-    d = get_disk(); return tr("dk_body") % (
-        "—" if d["pct"] is None else tr("dk_used") % (d["pct"], d["avail_gb"]),
-        sh("df -h / | tail -1"))
+    d = get_disk()
+    if d["pct"] is None:
+        return tr("st_disk_unk")
+    ok, detail = sh_args(["df", "-h", "/"])
+    return (tr("dk_body") % (tr("dk_used") % (d["pct"], d["avail_gb"]),
+                             detail.splitlines()[-1] if ok and detail else "")).rstrip()
 
 # ---------- state & alerts ----------
 def load_state():
@@ -567,10 +596,22 @@ def monitor(st):
     # rpc / sync
     s = get_status()
     rpc_dead = s is None
-    if rpc_dead and not st.get("rpc_dead"): A.append(tr("a_rpc_down"))
-    elif not rpc_dead and st.get("rpc_dead"): A.append(tr("a_rpc_up"))
+    # An outage cannot establish that a previously observed foreign endpoint has been corrected.
+    wrong_chain = s.get("wrong_chain") if s else st.get("wrong_chain")
+    if rpc_dead and not st.get("rpc_dead"):
+        A.append(rpc_problem(s))
+    elif s and wrong_chain and wrong_chain != st.get("wrong_chain"):
+        A.append(rpc_problem(s))
+    elif s and not wrong_chain:
+        if st.get("wrong_chain"):
+            A.append(tr("rpc_chain_ok") % (rpc_endpoint(), CHAIN_ID))
+        elif st.get("rpc_dead"):
+            A.append(tr("a_rpc_up") % rpc_endpoint())
     st["rpc_dead"] = rpc_dead
-    if s:
+    st["wrong_chain"] = wrong_chain
+    sg = None if wrong_chain else get_signing()
+    tombstoned = sg["tombstoned"] if sg else bool(st.get("tombstoned"))
+    if s and not wrong_chain:
         if s["catching_up"] and not st.get("catching_up"):
             A.append(tr("a_catching") % s["height"])
         elif not s["catching_up"] and st.get("catching_up"):
@@ -585,7 +626,7 @@ def monitor(st):
         # замера: одиночное совпадение высот ложнит при рестарте бота (первый тик
         # нового процесса стартует через секунды после последнего тика старого)
         ph = st.get("height")
-        if ph is not None and s["height"] is not None and s["height"] == ph and not rpc_dead:
+        if ph is not None and s["height"] == ph:
             st["stall_ticks"] = st.get("stall_ticks", 0) + 1
             if st["stall_ticks"] >= STALL_TICKS and not st.get("stalled"):
                 A.append(tr("a_stuck")
@@ -611,24 +652,32 @@ def monitor(st):
         pvp = st.get("vp")
         vp = s["vp"]
         if vp is not None:
-            if pvp and vp and vp < pvp * 0.9:
-                A.append(tr("a_vp_drop") % (pvp, vp))
-            if vp == 0 and pvp != 0:
-                A.append(tr("a_vp_zero"))
-            elif vp > 0 and pvp == 0:
-                A.append(tr("a_vp_ok") % vp)
+            if not tombstoned:
+                if pvp and vp and vp < pvp * 0.9:
+                    A.append(tr("a_vp_drop") % (pvp, vp))
+                if vp == 0 and pvp != 0:
+                    A.append(tr("a_vp_zero"))
+                elif vp > 0 and pvp == 0:
+                    A.append(tr("a_vp_ok") % vp)
             st["vp"] = vp
     # validator signing-info
-    sg = get_signing()
     if sg:
+        if tombstoned and not st.get("tombstoned"):
+            A.append(tr("a_tomb"))
+        st["tombstoned"] = tombstoned
+        if tombstoned:
+            st["jailed"], st["missed"] = sg["jailed"], sg["missed"]
+        had_signing_alert = st.get("signing_alerted", (st.get("signing_fail_ticks") or 0) >= SIGNING_FAIL_ALERT_TICKS)
+        if had_signing_alert and not tombstoned:
+            A.append(tr("a_signing_ok"))
+        st["signing_fail_ticks"] = 0
+        st["signing_alerted"] = False
+    if sg and not tombstoned:
         if sg["jailed"] and not st.get("jailed"):
             A.append(tr("a_jail") % sg["jailed_until"])
         elif not sg["jailed"] and st.get("jailed"):
             A.append(tr("a_unjail"))
         st["jailed"] = sg["jailed"]
-        if sg["tombstoned"] and not st.get("tombstoned"):
-            A.append(tr("a_tomb"))
-        st["tombstoned"] = sg["tombstoned"]
         m = sg["missed"]; pm = st.get("missed")
         warn_due = missed_warning_due(st, m, pm, time.time())
         # Critical escalation is independent of the yellow-warning latch.
@@ -645,8 +694,7 @@ def monitor(st):
                 A.append(tr("a_missing") % (m - pm, m))
                 st["missed_rate_alert_ts"] = now
         st["missed"] = m
-        st["signing_fail_ticks"] = 0
-    else:
+    elif not sg and not wrong_chain and not tombstoned:
         # Ветки else тут не было вовсе: при недоступной signing-info проверка джейла просто
         # переставала выполняться, молча и навсегда. Бот продолжал слать бодрые сводки, а
         # единственная проверка, ради которой он существует, не работала. Отказ мониторинга
@@ -654,19 +702,18 @@ def monitor(st):
         fails = int(st.get("signing_fail_ticks") or 0) + 1
         st["signing_fail_ticks"] = fails
         if fails == SIGNING_FAIL_ALERT_TICKS:
-            # Same implicit concatenation as fmt_val: a_nosign carries the %d, st_unchecked
-            # names what stops being checked.
-            A.append((tr("a_nosign") + tr("st_unchecked")) % fails)
+            A.append((tr("a_nosign") + tr("st_unchecked")) % (fails, rpc_endpoint()))
+            st["signing_alerted"] = True
     # peers
-    p = get_peers()
-    if p is None:
+    p = None if wrong_chain else get_peers()
+    if p is None and not wrong_chain:
         # Тот же класс, что PB-2, ставки ниже: /net_info недоступен → проверка пиров молча
         # пропускается. Раз подряд — не событие, но постоянная слепота должна быть слышна.
         _pf = int(st.get("peers_fail_ticks") or 0) + 1
         st["peers_fail_ticks"] = _pf
         if _pf == PEERS_FAIL_ALERT_TICKS:
             A.append(tr("a_nonet") % _pf)
-    else:
+    elif p is not None:
         st["peers_fail_ticks"] = 0
     if p is not None:
         low = p < PEERS_MIN
@@ -683,16 +730,13 @@ def monitor(st):
     # РЕ-АЛЕРТ критических состояний каждые 30 мин (урок инцидента 2026-07-19)
     now = time.time()
     crit = []
-    if st.get("jailed"):     crit.append(tr("a_jail_still"))
-    if st.get("tombstoned"): crit.append("💀 TOMBSTONED")
-    if st.get("stalled"):    crit.append(tr("a_stuck_still") % st.get("height"))
-    if st.get("rpc_dead"):   crit.append(tr("a_rpc_still"))
-    # missed, застрявший у порога джейла (1728), раньше давал ОДИН алерт и дальше тишину —
-    # в crit-список он не входил, хотя это именно то состояние, о котором надо напоминать.
-    if (st.get("missed") or 0) >= MISSED_CRIT:
-        crit.append(tr("a_missed_still") % (st["missed"], JAIL_THRESHOLD))
-    if st.get("vp") == 0:
-        crit.append(tr("a_vp_zero_still"))
+    if not tombstoned and not wrong_chain:
+        if st.get("jailed"): crit.append(tr("a_jail_still"))
+        if (st.get("missed") or 0) >= MISSED_CRIT:
+            crit.append(tr("a_missed_still") % (st["missed"], JAIL_THRESHOLD))
+        if st.get("vp") == 0: crit.append(tr("a_vp_zero_still"))
+    if not wrong_chain and st.get("stalled"): crit.append(tr("a_stuck_still") % st.get("height"))
+    if rpc_dead: crit.append(tr("a_rpc_still") % rpc_endpoint())
     if st.get("active") is False: crit.append(tr("a_svc_still"))
     if crit:
         if now - st.get("last_realert", 0) >= 1800:
@@ -763,6 +807,12 @@ def handle_callback(cb):
     dispatch(cid, data)
     sys.stderr.write("callback completed in %.1fs\n" % (time.time() - t1))
 
+def monitor_once(st):
+    try:
+        monitor(st)
+    except Exception as error:
+        sys.stderr.write("monitor: %s\n" % type(error).__name__)
+
 def run_bot():
     if not TOKEN:
         sys.stderr.write("BOT_TOKEN is not set\n"); sys.exit(1)
@@ -771,7 +821,7 @@ def run_bot():
     global _lang
     _lang = st.get("lang", DEFAULT_LANG)
     offset = st.get("offset", 0)
-    monitor(st)
+    monitor_once(st)
     broadcast(tr("m_started") % HOST)
     last = time.time()
     # net_fail ДОЛЖЕН существовать до первой итерации: он инкрементируется в ветке
@@ -795,7 +845,10 @@ def run_bot():
                 if cb:
                     try: handle_callback(cb)
                     except Exception as e: sys.stderr.write("callback: %s\n" % e)
-            save_state(st)
+            try:
+                save_state(st)
+            except OSError as error:
+                sys.stderr.write("state save: %s\n" % type(error).__name__)
             net_fail = 0
         elif upd is not None:
             time.sleep(2)  # HTTP-ошибка API (401/409/429): не долбим в busy-loop
@@ -807,8 +860,7 @@ def run_bot():
             net_fail += 1
             time.sleep(min(2 * (2 ** min(net_fail - 1, 4)), 60))  # 2,4,8,16,32,→60 с
         if time.time() - last >= CHECK_INTERVAL:
-            try: monitor(st)
-            except Exception as e: sys.stderr.write("monitor: %s\n" % e)
+            monitor_once(st)
             last = time.time()
 
 def read_varint(data, offset):
@@ -873,16 +925,20 @@ def abci_query(path, address=None):
 
 def check_node():
     status = get_status()
-    signing = get_signing()
+    wrong_chain = status.get("wrong_chain") if status else None
+    signing = None if wrong_chain else get_signing()
     report = {"chain_id": CHAIN_ID, "host": HOST,
               "service_active": svc_active(), "status": status,
               "signing": signing, "slash_window": SLASH_WINDOW,
-              "delegation": get_delegation(),
+              "delegation": None if wrong_chain else get_delegation(),
               "jail_threshold": JAIL_THRESHOLD,
               "missed_warning": MISSED_WARN, "missed_critical": MISSED_CRIT,
-              "peers": get_peers(), "disk": get_disk()}
+              "peers": None if wrong_chain else get_peers(), "disk": get_disk()}
+    if wrong_chain:
+        report["rpc_error"] = {"kind": "chain_id_mismatch", "endpoint": rpc_endpoint(),
+                               "expected": CHAIN_ID, "actual": wrong_chain}
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if status and signing and report["service_active"] else 1
+    return 0 if status and not wrong_chain and signing and report["service_active"] else 1
 
 
 def main():

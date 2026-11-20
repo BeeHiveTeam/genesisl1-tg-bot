@@ -14,6 +14,8 @@ class Alerts(unittest.TestCase):
         self.clock = 10000
         self.missed = 499
         self.jailed = False
+        self.tombstoned = False
+        self.vp = 1
         self.available = True
         self.height = 100
         self.messages = []
@@ -24,14 +26,15 @@ class Alerts(unittest.TestCase):
                        JAIL_THRESHOLD=1728, CHECK_INTERVAL=60, STALL_TICKS=3,
                        MISSED_ALERT_MIN_GAP=900, SIGNING_FAIL_ALERT_TICKS=3,
                        PEERS_FAIL_ALERT_TICKS=5, PEERS_MIN=3, DISK_WARN_PCT=85,
-                       LAG_WARN=30, tr=lambda key: TEXT[key]['en'],
+                       LAG_WARN=30, CHAIN_ID='test-chain', rpc_endpoint=lambda: 'localhost:27777',
+                       tr=lambda key: TEXT[key]['en'],
                        svc_active=lambda: True, svc_start=lambda: 'unchanged',
-                       get_status=lambda: dict(height=self.height, lag=0, catching_up=False, vp=1),
-                       get_signing=lambda: dict(missed=self.missed, jailed=self.jailed, jailed_until='test', tombstoned=False) if self.available else None,
+                       get_status=lambda: dict(height=self.height, lag=0, catching_up=False, vp=self.vp),
+                       get_signing=lambda: dict(missed=self.missed, jailed=self.jailed, jailed_until='test', tombstoned=self.tombstoned) if self.available else None,
                        get_peers=lambda: 12, get_disk=lambda: dict(pct=44, avail_gb=400),
                        broadcast=lambda text, st: self.messages.append(text),
                        retry_pending=lambda st: None, save_state=lambda st: setattr(self, 'saved', json.loads(json.dumps(st))))
-        funcs = [n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name in ('monitor', 'missed_warning_due')]
+        funcs = [n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name in ('monitor', 'missed_warning_due', 'rpc_problem')]
         exec(compile(ast.Module(body=funcs, type_ignores=[]), str(SOURCE), 'exec'), self.ns)
         self.state = {}
 
@@ -85,8 +88,48 @@ class Alerts(unittest.TestCase):
         self.tick(500)
         self.assertIn('signing-info unavailable', self.tick(500))
         self.available = True
-        self.assertIn('Actively missing blocks: +20', self.tick(520, 1000))
+        recovered = self.tick(520, 1000)
+        self.assertIn('Actively missing blocks: +20', recovered)
+        self.assertIn('signing-info available again', recovered)
+        self.assertNotIn('available again', self.tick(521))
         self.assertEqual(self.state['signing_fail_ticks'], 0)
+
+    def test_short_signing_outage_is_silent(self):
+        self.available = False
+        self.tick(100)
+        self.available = True
+        self.assertEqual(self.tick(100), '')
+
+    def test_tombstone_is_terminal_across_restart_and_signing_outage(self):
+        self.tick(100)
+        self.tombstoned = self.jailed = True
+        self.vp = 0
+        self.assertEqual(self.tick(1700), TEXT['a_tomb']['en'])
+        self.state = self.saved
+        self.assertEqual(self.tick(1710, 3600), '')
+        self.available = False
+        for _ in range(4):
+            self.assertEqual(self.tick(1710, 1800), '')
+        self.ns['svc_active'] = lambda: False
+        self.assertIn('SERVICE DOWN', self.tick(1710))
+
+    def test_wrong_chain_outage_and_recovery_are_separate(self):
+        correct = self.ns['get_status']
+        self.tick(100)
+        self.ns['get_status'] = lambda: {'wrong_chain': 'other'}
+        self.assertIn('other (expected test-chain)', self.tick(100))
+        self.assertEqual(self.tick(100, 3600), '')
+        self.assertFalse(self.state['rpc_dead'])
+        self.ns['get_status'] = lambda: None
+        self.assertIn('not responding', self.tick(100))
+        self.assertEqual(self.state['wrong_chain'], 'other')
+        self.assertEqual(self.state['signing_fail_ticks'], 0)
+        self.ns['get_status'] = correct
+        self.assertIn('expected chain test-chain again', self.tick(100))
+        self.ns['get_status'] = lambda: None
+        self.assertIn('RPC localhost:27777 not responding', self.tick(100))
+        self.ns['get_status'] = lambda: {'wrong_chain': 'other'}
+        self.assertNotIn('responding again', self.tick(100))
 
     def test_translations_have_correct_boundary_and_network(self):
         for language in ('en', 'ru', 'de'):
