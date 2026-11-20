@@ -1,50 +1,42 @@
-"""Offline alert regression checks; no config secrets, RPC, Telegram or validator keys."""
-import ast
+"""Exercise complete alert cycles against probe fixtures, including persisted state."""
 import json
-from pathlib import Path
-from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock
 
-SOURCE = Path(__file__).with_name('bot.py')
-TREE = ast.parse(SOURCE.read_text())
-TEXT = next(ast.literal_eval(n.value) for n in TREE.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'T' for t in n.targets))
+from alerts import Monitor
+from messages import T as TEXT
+from node import Node
+from settings import Settings
+
 
 class Alerts(unittest.TestCase):
     def setUp(self):
         self.clock = 10000
-        self.missed = 499
-        self.jailed = False
-        self.tombstoned = False
+        self.jailed = self.tombstoned = self.catching = False
         self.vp = 1
         self.available = True
-        self.height = 100
-        self.messages = []
-        self.saved = None
-        self.ns = dict(time=SimpleNamespace(time=lambda: self.clock),
-                       MISSED_WARN=500, MISSED_CRIT=1500, MISSED_WARN_HYSTERESIS=50,
-                       MISSED_WARN_STEP=100, MISSED_WARN_REMINDER_SEC=3600,
-                       JAIL_THRESHOLD=1728, CHECK_INTERVAL=60, STALL_TICKS=3,
-                       MISSED_ALERT_MIN_GAP=900, SIGNING_FAIL_ALERT_TICKS=3,
-                       PEERS_FAIL_ALERT_TICKS=5, PEERS_MIN=3, DISK_WARN_PCT=85,
-                       LAG_WARN=30, CHAIN_ID='test-chain', rpc_endpoint=lambda: 'localhost:27777',
-                       tr=lambda key: TEXT[key]['en'],
-                       svc_active=lambda: True, svc_start=lambda: 'unchanged',
-                       get_status=lambda: dict(height=self.height, lag=0, catching_up=False, vp=self.vp),
-                       get_signing=lambda: dict(missed=self.missed, jailed=self.jailed, jailed_until='test', tombstoned=self.tombstoned) if self.available else None,
-                       get_peers=lambda: 12, get_disk=lambda: dict(pct=44, avail_gb=400),
-                       broadcast=lambda text, st: self.messages.append(text),
-                       retry_pending=lambda st: None, save_state=lambda st: setattr(self, 'saved', json.loads(json.dumps(st))))
-        funcs = [n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name in ('monitor', 'missed_warning_due', 'rpc_problem')]
-        exec(compile(ast.Module(body=funcs, type_ignores=[]), str(SOURCE), 'exec'), self.ns)
+        self.height, self.lag = 100, 0
+        self.node = Mock(spec=Node)
+        self.node.svc_active.return_value = True
+        self.node.svc_start.return_value = "unchanged"
+        self.node.rpc_endpoint.return_value = "localhost:27777"
+        self.node.get_status.side_effect = lambda: dict(height=self.height, lag=self.lag, catching_up=self.catching, vp=self.vp)
+        self.limits = dict(window=2000, jail=1728, warning=500, critical=1500)
+        self.node.get_signing.side_effect = lambda: dict(missed=self.missed, jailed=self.jailed, jailed_until="test",
+                                 tombstoned=self.tombstoned, limits=self.limits) if self.available else None
+        self.node.get_peers.return_value = 12
+        self.node.get_disk.return_value = dict(pct=44, avail_gb=400)
+        config = Settings.from_values({"CHAIN_ID":"test-chain", "RPC_URL":"http://localhost:27777"})
+        self.monitor = Monitor(config, self.node, lambda key: TEXT[key]["en"])
         self.state = {}
 
-    def tick(self, missed, seconds=60):
+    def tick(self, missed=100, seconds=60, *, advance=1):
         self.missed = missed
         self.clock += seconds
-        self.height += 1
-        self.messages.clear()
-        self.ns['monitor'](self.state)
-        return '\n'.join(self.messages)
+        self.height += advance
+        messages = self.monitor.collect(self.state, self.clock)
+        self.saved = json.loads(json.dumps(self.state))
+        return "\n".join(messages)
 
     def test_boundary_flapping_and_hourly_reminder(self):
         self.tick(499)
@@ -110,26 +102,108 @@ class Alerts(unittest.TestCase):
         self.available = False
         for _ in range(4):
             self.assertEqual(self.tick(1710, 1800), '')
-        self.ns['svc_active'] = lambda: False
+        self.node.svc_active.return_value = False
         self.assertIn('SERVICE DOWN', self.tick(1710))
 
     def test_wrong_chain_outage_and_recovery_are_separate(self):
-        correct = self.ns['get_status']
+        correct = self.node.get_status.side_effect
         self.tick(100)
-        self.ns['get_status'] = lambda: {'wrong_chain': 'other'}
+        self.node.get_status.side_effect = lambda: {'wrong_chain': 'other'}
         self.assertIn('other (expected test-chain)', self.tick(100))
         self.assertEqual(self.tick(100, 3600), '')
         self.assertFalse(self.state['rpc_dead'])
-        self.ns['get_status'] = lambda: None
+        self.node.get_status.side_effect = lambda: None
         self.assertIn('not responding', self.tick(100))
         self.assertEqual(self.state['wrong_chain'], 'other')
         self.assertEqual(self.state['signing_fail_ticks'], 0)
-        self.ns['get_status'] = correct
+        self.node.get_status.side_effect = correct
         self.assertIn('expected chain test-chain again', self.tick(100))
-        self.ns['get_status'] = lambda: None
+        self.node.get_status.side_effect = lambda: None
         self.assertIn('RPC localhost:27777 not responding', self.tick(100))
-        self.ns['get_status'] = lambda: {'wrong_chain': 'other'}
+        self.node.get_status.side_effect = lambda: {'wrong_chain': 'other'}
         self.assertNotIn('responding again', self.tick(100))
+
+    def test_service_outage_reminder_recovery_and_restart(self):
+        self.assertEqual(self.tick(), "")
+        self.node.svc_active.return_value = False
+        down = self.tick()
+        self.assertEqual(down.count("SERVICE DOWN"), 1)
+        self.assertIn("still down", down)
+        self.assertEqual(self.tick(seconds=1799), "")
+        self.assertIn("still down", self.tick(seconds=1))
+        self.node.svc_active.return_value = True
+        self.node.svc_start.return_value = "new start"
+        up = self.tick()
+        self.assertIn("active again", up)
+        self.assertIn("RESTART", up)
+        self.assertIn("new start", up)
+        self.assertEqual(self.tick(), "")
+        self.node.svc_start.return_value = "another start"
+        self.assertIn("RESTART", self.tick())
+        self.node.svc_start.return_value = ""
+        self.assertEqual(self.tick(), "")
+
+    def test_rpc_outage_recovery_is_reported_once_at_configured_endpoint(self):
+        self.tick()
+        healthy = self.node.get_status.side_effect
+        self.node.get_status.side_effect = lambda: None
+        first = self.tick()
+        self.assertIn("RPC localhost:27777 not responding", first)
+        self.assertIn("RPC localhost:27777 still not responding", first)
+        self.assertEqual(self.tick(seconds=1799), "")
+        self.assertIn("still not responding", self.tick(seconds=1))
+        self.node.get_status.side_effect = healthy
+        self.assertEqual(self.tick(), "✅ RPC localhost:27777 responding again")
+        self.assertEqual(self.tick(), "")
+
+    def test_tombstone_survives_stale_samples_until_another_identity_is_configured(self):
+        self.tick()
+        self.jailed = self.tombstoned = True
+        self.assertEqual(self.tick(), TEXT["a_tomb"]["en"])
+        self.tombstoned = False
+        self.state = self.saved
+        self.assertEqual(self.tick(seconds=3600), "")
+        self.assertTrue(self.state["tombstoned"])
+        other = Settings.from_values({"CHAIN_ID":"test-chain","VALCONS":"other"})
+        self.monitor = Monitor(other, self.node, lambda key: TEXT[key]["en"])
+        self.assertIn("VALIDATOR IS JAILED", self.tick())
+        self.assertFalse(self.state["tombstoned"])
+
+    def test_sync_height_peers_and_disk_transitions_at_their_boundaries(self):
+        self.lag = 30
+        self.node.get_peers.return_value = 3
+        self.node.get_disk.return_value = {"pct":84, "avail_gb":20}
+        self.assertEqual(self.tick(), "")
+        self.catching, self.lag = True, 31
+        self.node.get_peers.return_value = 2
+        self.node.get_disk.return_value["pct"] = 85
+        down = self.tick()
+        for message in ("catching_up=true","Block lag: 31s","Few peers: 2","DISK /: 85%"):
+            self.assertIn(message, down)
+        self.assertEqual(self.tick(advance=0), "")
+        self.assertEqual(self.tick(advance=0), "")
+        self.assertIn("BLOCKS NOT ADVANCING", self.tick(advance=0))
+        self.catching, self.lag = False, 30
+        self.node.get_peers.return_value = 3
+        self.node.get_disk.return_value["pct"] = 84
+        up = self.tick()
+        for message in ("Sync recovered","lag is normal (30s)","Blocks advancing again","Peers normal: 3","Disk ok"):
+            self.assertIn(message, up)
+        self.assertEqual(self.tick(), "")
+
+    def test_reloaded_thresholds_apply_to_reminders_when_signing_times_out(self):
+        self.limits = dict(window=100,jail=13,warning=2,critical=10)
+        self.tick(10)
+        self.available = False
+        self.state = self.saved
+        self.assertIn("MISSED BLOCKS still 10 (jail threshold 13)",self.tick(10,1800))
+
+    def test_unknown_height_does_not_clear_a_stall(self):
+        self.state.update(stalled=True, height=100, stall_ticks=4)
+        self.node.get_status.side_effect = lambda: dict(height=None, vp=None, lag=None, catching_up=False)
+        self.tick()
+        self.assertEqual(self.state["height"],100)
+        self.assertTrue(self.state["stalled"])
 
     def test_translations_have_correct_boundary_and_network(self):
         for language in ('en', 'ru', 'de'):

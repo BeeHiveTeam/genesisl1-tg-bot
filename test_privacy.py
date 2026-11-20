@@ -1,7 +1,6 @@
 import contextlib
 import getpass
 import io
-import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +8,8 @@ from unittest.mock import patch
 import warnings
 
 import configure
+from bot import Bot
+from settings import Settings
 
 
 class PrivacyTests(unittest.TestCase):
@@ -29,14 +30,8 @@ class PrivacyTests(unittest.TestCase):
             self.assertEqual(config.read_bytes(), original)
 
     def test_unlisted_chat_cannot_get_node_reports(self):
-        import importlib.util
-        with tempfile.TemporaryDirectory() as folder, patch.dict(
-                os.environ, {"GENESISL1_BOT_CONFIG": str(Path(folder)/"unused"), "PREFER_IPV4":"0"}):
-            spec = importlib.util.spec_from_file_location("monitor_privacy_test", Path(__file__).with_name("bot.py"))
-            bot = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(bot)
-        with patch.object(bot, "ALLOWED", {"1"}), patch.object(bot, "HOST", "private-node-name"), \
-             patch.object(bot, "dispatch") as report, patch.object(bot, "send") as send, \
+        bot = Bot(Settings.from_values({"ALLOWED_CHAT_IDS": "1"}))
+        with patch.object(bot, "dispatch") as report, patch.object(bot, "send") as send, \
              patch.object(bot, "tg", return_value={"ok": True}), contextlib.redirect_stderr(io.StringIO()):
             bot.handle({"chat":{"id":2}, "text":"/status"})
             bot.handle({"chat":{"id":2}, "text":"/start"})
@@ -44,7 +39,7 @@ class PrivacyTests(unittest.TestCase):
             report.assert_not_called()
             self.assertEqual(send.call_count, 3)
             for call in send.call_args_list:
-                self.assertNotIn("private-node-name", call.args[1])
+                self.assertNotIn(bot.cfg.host, call.args[1])
             bot.handle({"chat":{"id":1}, "text":"/status"})
             report.assert_called_once_with("1", "status")
 

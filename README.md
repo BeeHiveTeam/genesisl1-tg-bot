@@ -59,7 +59,9 @@ journalctl -u genesisl1-tg-bot.service -f
 Alert state and Telegram offsets are persisted in /var/lib/genesisl1-tg-bot.
 A local lock prevents two instances from sharing the same runtime state.
 Pending alert retries are bounded, expire after six hours by default and use
-short timeouts. Language selection persists across restarts.
+short timeouts. Language selection persists across restarts. Signing thresholds are derived from each successful probe. The monitor records the last verified thresholds for reminders during an outage.
+
+When upgrading an existing installation, run the installer from the complete repository, run the service-user check above, then restart the Telegram bot with `sudo systemctl restart genesisl1-tg-bot.service`. The installer copies all runtime modules and preserves the existing configuration and alert state.
 
 The process has a 10% CPU quota and a 128 MiB memory limit. Alerts depend on
 this host and its network connection remaining available. Full Telegram

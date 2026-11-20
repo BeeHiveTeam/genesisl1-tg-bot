@@ -7,7 +7,8 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-python3 -m py_compile "$SCRIPT_DIR/bot.py" "$SCRIPT_DIR/configure.py"
+runtime=(settings.py messages.py node.py alerts.py configure.py bot.py)
+(cd "$SCRIPT_DIR" && python3 -B -c 'import bot, configure')
 
 if ! getent passwd genesisl1-bot >/dev/null; then
     /usr/sbin/useradd --system --user-group --no-create-home \
@@ -16,7 +17,7 @@ fi
 
 install -d -m 0755 /opt/genesisl1-tg-bot
 install -d -m 0750 -o root -g genesisl1-bot /etc/genesisl1-tg-bot
-for name in bot.py configure.py LICENSE; do
+for name in "${runtime[@]}" LICENSE; do
     install -m 0644 "$SCRIPT_DIR/$name" "/opt/genesisl1-tg-bot/$name"
 done
 if [ ! -e /etc/genesisl1-tg-bot/config.env ]; then
