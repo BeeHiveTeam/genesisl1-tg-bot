@@ -80,13 +80,18 @@ def main():
     if not allowed or not all(re.fullmatch(r'-?\d+', value) for value in allowed):
         raise SystemExit('At least one numeric chat ID is required.')
     replacements = {'BOT_TOKEN': token, 'ALLOWED_CHAT_IDS': ','.join(allowed)}
+    written = set()
     lines = []
     for line in original.splitlines():
-        key = line.split('=', 1)[0].strip()
-        if key in replacements:
-            line = key + '=' + replacements.pop(key)
+        name, separator, _ = line.partition('=')
+        key = name.strip()
+        if separator and key in replacements:
+            if key in written:
+                continue
+            line = key + '=' + replacements[key]
+            written.add(key)
         lines.append(line)
-    lines.extend(key + '=' + value for key, value in replacements.items())
+    lines.extend(key + '=' + value for key, value in replacements.items() if key not in written)
     descriptor, temporary = tempfile.mkstemp(prefix='config.', dir=CONFIG.parent)
     try:
         with os.fdopen(descriptor, 'w') as output:

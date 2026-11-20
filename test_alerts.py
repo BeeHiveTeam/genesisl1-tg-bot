@@ -92,6 +92,19 @@ class Alerts(unittest.TestCase):
         self.available = True
         self.assertEqual(self.tick(100), '')
 
+    def test_legacy_signing_outage_recovers_once_at_the_alert_threshold(self):
+        for failures, recovery in ((2, ""), (3, "✅ signing-info available again"), (4, "✅ signing-info available again")):
+            with self.subTest(failures=failures):
+                self.state = {"signing_fail_ticks": failures}
+                self.assertEqual(self.tick(), recovery)
+                self.state = self.saved
+                self.assertEqual(self.tick(), "")
+
+    def test_german_block_lag_alert_reports_the_delay(self):
+        self.monitor.tr = lambda key: TEXT[key]["de"]
+        self.lag = 46
+        self.assertEqual(self.tick(), "🟡 Block-Rückstand: 46s")
+
     def test_tombstone_is_terminal_across_restart_and_signing_outage(self):
         self.tick(100)
         self.tombstoned = self.jailed = True

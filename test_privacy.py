@@ -13,6 +13,18 @@ from settings import Settings
 
 
 class PrivacyTests(unittest.TestCase):
+    def test_settings_repr_omits_telegram_and_rpc_credentials_and_recipients(self):
+        settings = Settings.from_values({"BOT_TOKEN": "private-test-marker", "ALLOWED_CHAT_IDS": "-99112233",
+                                         "RPC_URL": "https://user:private-rpc-marker@rpc.invalid/"})
+        visible = repr(settings)
+        for private in ("private-test-marker", "-99112233", "private-rpc-marker"):
+            self.assertNotIn(private, visible)
+
+    def test_configuration_reports_telegram_api_rejection(self):
+        with patch.object(configure.urllib.request, "urlopen", return_value=io.BytesIO(b'{"ok":false}')), \
+             self.assertRaisesRegex(RuntimeError, "^Telegram rejected the request$"):
+            configure.telegram("local-fixture", "getMe")
+
     def test_setup_stops_if_terminal_would_echo(self):
         with tempfile.TemporaryDirectory() as folder:
             config = Path(folder) / "config.env"

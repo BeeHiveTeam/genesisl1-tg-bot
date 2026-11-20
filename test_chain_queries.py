@@ -107,6 +107,21 @@ class ChainQueries(unittest.TestCase):
             for query in (signing, stake, peers):
                 query.assert_not_called()
 
+    def test_sync_report_marks_lag_with_or_without_catchup(self):
+        bot = make_bot(LANG="en", BLOCK_LAG_WARN_SEC="30")
+        for lag, catching_up, label in ((30, False, "✅ in sync"), (30, True, "🟡 catching_up"),
+                                        (46, False, "🔴 BEHIND"), (46, True, "🔴 BEHIND")):
+            status = {"height": 100, "lag": lag, "catching_up": catching_up}
+            with self.subTest(status=status), patch.object(bot.node, "get_status", return_value=status):
+                self.assertEqual(bot.fmt_sync().splitlines()[0], "Sync " + label)
+
+    def test_net_info_returns_numeric_peer_count_or_unknown(self):
+        for response, expected in (({"result": {"n_peers": "12"}}, 12), ({"result": {"n_peers": "0"}}, 0),
+                                   ({"result": {}}, None), (None, None)):
+            with self.subTest(response=response), patch.object(self.bot.node, "http_get", return_value=response) as get:
+                self.assertEqual(self.bot.node.get_peers(), expected)
+                get.assert_called_once_with("/net_info")
+
     def test_endpoint_in_reports_uses_only_host_and_effective_port(self):
         for url, label in (("http://127.0.0.1:26657", "127.0.0.1:26657"),
                            ("https://{}@rpc.invalid/private?q=x".format("operator:example"), "rpc.invalid:443"),
@@ -187,6 +202,7 @@ class ChainQueries(unittest.TestCase):
                 self.assertEqual(self.bot.load_state()["lang"], "de")
 
     def test_pending_retries_are_bounded_and_expired_alerts_are_dropped(self):
+        self.bot = make_bot(ALLOWED_CHAT_IDS="1")
         state = {"pending_alerts": [
             {"cid": "1", "text": "expired", "ts": 1},
             *[{"cid": "1", "text": str(index), "ts": 100000} for index in range(5)],

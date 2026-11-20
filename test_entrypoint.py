@@ -54,6 +54,45 @@ class EntryPoints(unittest.TestCase):
             self.assertEqual(json.loads(run.stdout)["rpc_error"], {"kind":"chain_id_mismatch",
                              "endpoint":"127.0.0.1:35777", "expected":"expected","actual":"foreign"})
 
+    def test_installer_ships_configuration_helper_and_preserves_operator_config(self):
+        repo = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            unit_dir = root / "etc/systemd/system"
+            unit_dir.mkdir(parents=True)
+
+            # Run the package installation in a disposable directory with an existing account.
+            # Keep the installer file list, modes, new/existing config check and copying intact.
+            script = repo / "install.sh"
+            body = script.read_text().replace("/opt/", "./opt/").replace("/etc/", "./etc/")
+            body = body.replace("/usr/sbin/useradd", "false").replace("-o root -g genesisl1-bot", "")
+            stubs = """id() { echo 0; }
+getent() { return 0; }
+systemctl() { [[ "$*" == daemon-reload ]] && echo reload >> reloads; }
+install() {
+    case "${!#}" in ./opt/*|./etc/*) command install "$@" ;; *) return 1 ;; esac
+}
+"""
+            def install():
+                result = subprocess.run(["bash", "-c", stubs + body, str(script)], cwd=root, env={"PATH": os.defpath},
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+            install()
+            package = root / "opt/genesisl1-tg-bot"
+            for name in ("bot.py", "settings.py", "messages.py", "node.py", "alerts.py", "configure.py", "LICENSE"):
+                self.assertEqual((package / name).read_bytes(), (repo / name).read_bytes())
+                self.assertEqual((package / name).stat().st_mode & 0o777, 0o644)
+            unit = "genesisl1-tg-bot.service"
+            self.assertEqual((unit_dir / unit).read_bytes(), (repo / unit).read_bytes())
+            config = root / "etc/genesisl1-tg-bot/config.env"
+            self.assertEqual(config.read_bytes(), (repo / "config.env.example").read_bytes())
+            self.assertEqual(config.stat().st_mode & 0o777, 0o640)
+            config.write_text("CHECK_INTERVAL=71\n")
+            install()
+            self.assertEqual(config.read_text(), "CHECK_INTERVAL=71\n")
+            self.assertEqual((root / "reloads").read_text().splitlines(), ["reload", "reload"])
+
     def test_ipv4_preference_retains_ipv6_and_order_within_families(self):
         answers = [(socket.AF_INET6, "v6a"), (socket.AF_INET, "v4a"),
                    (socket.AF_INET6,"v6b"), (socket.AF_INET,"v4b")]

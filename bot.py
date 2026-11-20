@@ -2,6 +2,7 @@
 """Read-only Telegram monitoring for a GenesisL1 validator."""
 import fcntl
 import json
+import math
 import os
 import socket
 import ssl
@@ -22,6 +23,13 @@ def prefer_ipv4():
     def resolve(*args, **kwargs):
         return sorted(original(*args, **kwargs), key=lambda r: r[0] != socket.AF_INET)
     socket.getaddrinfo = resolve
+
+
+def alert_queue(st):
+    queue = st.get("pending_alerts")
+    if not isinstance(queue, list):
+        queue = st["pending_alerts"] = []
+    return queue
 
 
 class Bot:
@@ -93,14 +101,28 @@ class Bot:
         for cid in self.cfg.allowed:
             if self.send(cid, text, kb=True):
                 sys.stderr.write("Telegram alert delivered\n")
-            elif st is not None:
-                st.setdefault("pending_alerts", []).append({"cid": cid, "text": text, "ts": time.time()})
+            elif st is not None and self.cfg.pending_max > 0:
+                alert_queue(st).append({"cid": cid, "text": text, "ts": time.time()})
                 sys.stderr.write("Telegram alert queued for retry\n")
 
     def retry_pending(self, st):
+        if self.cfg.pending_max <= 0:
+            st["pending_alerts"] = []
+            return
         now = time.time()
-        pending = [alert for alert in st.get("pending_alerts", [])
-                   if now - float(alert.get("ts", 0)) <= self.cfg.pending_ttl_sec][-self.cfg.pending_max:]
+        pending = []
+        for alert in alert_queue(st):
+            if not isinstance(alert, dict) or str(alert.get("cid", "")) not in self.cfg.allowed:
+                continue
+            if not isinstance(alert.get("text"), str):
+                continue
+            try:
+                age = now - float(alert.get("ts"))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(age) and age <= self.cfg.pending_ttl_sec:
+                pending.append(alert)
+        pending = pending[-self.cfg.pending_max:]
         remaining = []
         for alert in pending[:2]:
             if not self.send(alert["cid"], self.tr("a_repeat") + alert["text"], kb=True, timeout=5):
@@ -210,8 +232,11 @@ class Bot:
 
     def load_state(self):
         try:
-            with open(self.cfg.state_path) as f: return json.load(f)
-        except Exception: return {}
+            with open(self.cfg.state_path) as f:
+                state = json.load(f)
+            return state if isinstance(state, dict) else {}
+        except Exception:
+            return {}
 
     def save_state(self, st):
         tmp = self.cfg.state_path + ".tmp"
