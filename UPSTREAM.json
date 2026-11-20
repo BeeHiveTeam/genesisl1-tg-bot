@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/BeeHiveTeam/provenance-tg-bot",
+  "commit": "037d0f92a108dcafe54793f7c5d5dd5ef1cf4f12",
+  "license": "MIT",
+  "adaptation": "GenesisL1 validator monitoring via local read-only CometBFT ABCI queries"
+}

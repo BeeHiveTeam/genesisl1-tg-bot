@@ -1,0 +1,20 @@
+# secrets / runtime — never commit
+config.env
+config.env.*
+!config.env.example
+.env
+.env.*
+!*.env.example
+state.json
+state.json.*
+*.log
+*.pem
+*.key
+node_key.json
+priv_validator_key.json
+keyring-*/
+*.tmp
+
+# python
+__pycache__/
+*.pyc
